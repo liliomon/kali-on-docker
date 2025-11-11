@@ -1239,6 +1239,506 @@ pause
 
 ---
 
+## 🌐 Paso 10: Conectarse desde Otro Equipo con MobaXterm
+
+### 10.1 Configurar Contenedor para Acceso Remoto
+
+**En el equipo host (donde está Docker):**
+
+```bash
+# Detener contenedor actual si existe
+docker stop kali-gui-v5
+docker rm kali-gui-v5
+
+# Crear contenedor exponiendo en todas las interfaces
+docker run -d -p 0.0.0.0:3390:3390 --name kali-gui-v5 kali-gui:v1 tail -f /dev/null
+
+# Conectarse y iniciar XRDP
+docker exec -it kali-gui-v5 /bin/bash
+sudo /usr/sbin/xrdp-sesman
+sleep 2
+sudo /usr/sbin/xrdp
+exit
+```
+
+### 10.2 Configurar Firewall de Windows
+
+**En PowerShell como Administrador:**
+
+```powershell
+# Permitir puerto 3390 en firewall
+New-NetFirewallRule -DisplayName "XRDP Kali Remote" -Direction Inbound -LocalPort 3390 -Protocol TCP -Action Allow
+
+# Obtener IP del host
+ipconfig
+# Anota la "Dirección IPv4", ejemplo: 192.168.1.50
+```
+
+### 10.3 Instalar y Configurar MobaXterm
+
+#### Descargar MobaXterm
+
+1. Ve a: https://mobaxterm.mobatek.net/download.html
+2. Descarga **"Home Edition (Portable edition)"** (no requiere instalación)
+3. Descomprime el archivo ZIP
+4. Ejecuta `MobaXterm_Personal.exe`
+
+#### Conectar con MobaXterm
+
+**Método 1: Conexión Directa RDP**
+
+1. Abre MobaXterm
+2. Clic en **"Session"** (botón superior izquierdo)
+3. Selecciona **"RDP"**
+4. Configura:
+   - **Remote host:** `192.168.1.50` (IP del host)
+   - **Port:** `3390`
+   - **Username:** `tuusuario`
+5. Clic en **"OK"**
+6. Ingresa tu contraseña cuando se solicite
+7. ¡Conectado!
+
+**Método 2: Guardar Sesión para Uso Futuro**
+
+1. Después de configurar la conexión, antes de hacer clic en OK
+2. Marca la casilla **"Bookmark settings"**
+3. En **"Session name"** escribe: `Kali Docker`
+4. Clic en **"OK"**
+5. La próxima vez, solo haz doble clic en la sesión guardada
+
+**Método 3: Conexión desde Otra Red (Internet)**
+
+Si necesitas conectarte desde fuera de tu red local:
+
+1. Configura **Port Forwarding** en tu router:
+   - Puerto externo: `3390`
+   - Puerto interno: `3390`
+   - IP interna: `192.168.1.50` (IP del host)
+
+2. Obtén tu IP pública: https://www.whatismyip.com/
+
+3. En MobaXterm:
+   - Remote host: `TU_IP_PUBLICA`
+   - Port: `3390`
+
+### 10.4 Características Útiles de MobaXterm
+
+#### Transferir Archivos
+
+MobaXterm incluye un explorador de archivos SFTP integrado:
+- Panel izquierdo: Navega por archivos del servidor
+- Arrastra y suelta archivos entre tu PC y Kali
+
+#### Múltiples Sesiones
+
+- Abre múltiples pestañas con diferentes sesiones
+- Clic derecho en sesión → "Duplicate session"
+
+#### Grabar Sesión
+
+- Session → Recording → Start recording
+- Guarda todo lo que haces en la sesión
+
+#### Terminal Local
+
+- Tools → MobaXterm terminal
+- Terminal local de Windows con comandos Unix
+
+### 10.5 Solución de Problemas MobaXterm
+
+**Problema: "Connection refused"**
+
+```bash
+# En el host, verificar que XRDP está corriendo
+docker exec kali-gui-v5 ps aux | grep xrdp
+
+# Si no está corriendo, iniciarlo
+docker exec -it kali-gui-v5 /bin/bash
+sudo /usr/sbin/xrdp-sesman
+sleep 2
+sudo /usr/sbin/xrdp
+exit
+```
+
+**Problema: "Authentication failed"**
+
+```bash
+# Cambiar contraseña del usuario
+docker exec -it kali-gui-v5 /bin/bash
+sudo passwd tuusuario
+exit
+```
+
+**Problema: Pantalla negra después de conectar**
+
+```bash
+# Reiniciar servicios XRDP
+docker exec kali-gui-v5 pkill xrdp
+docker exec kali-gui-v5 pkill xrdp-sesman
+docker exec -d kali-gui-v5 /usr/sbin/xrdp-sesman
+sleep 2
+docker exec -d kali-gui-v5 /usr/sbin/xrdp
+```
+
+---
+
+## 🐳 Paso 11: Usar Docker Compose (Método Automatizado)
+
+### 11.1 Crear Archivo docker-compose.yml
+
+Crea un archivo llamado `docker-compose.yml` en tu directorio de trabajo con el siguiente contenido:
+
+```yaml
+version: '3.8'
+
+services:
+  kali-gui:
+    image: kalilinux/kali-rolling
+    container_name: kali-gui-rdp
+    hostname: kali-docker
+    
+    # Exponer puerto RDP en todas las interfaces
+    ports:
+      - "0.0.0.0:3390:3390"
+    
+    # Mantener contenedor corriendo
+    stdin_open: true
+    tty: true
+    
+    # Reiniciar automáticamente
+    restart: unless-stopped
+    
+    # Volúmenes para persistencia de datos
+    volumes:
+      - kali-home:/home
+      - kali-root:/root
+      - kali-opt:/opt
+    
+    # Variables de entorno
+    environment:
+      - DISPLAY=:1
+      - DEBIAN_FRONTEND=noninteractive
+    
+    # Comando de inicio
+    command: >
+      bash -c "
+        apt update &&
+        apt install -y sudo nano vim wget curl git xrdp xorgxrdp kali-desktop-xfce xfce4 xfce4-goodies dbus-x11 &&
+        useradd -m -s /bin/bash kaliuser &&
+        echo 'kaliuser:kali123' | chpasswd &&
+        usermod -aG sudo kaliuser &&
+        echo 'kaliuser ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/kaliuser &&
+        chmod 0440 /etc/sudoers.d/kaliuser &&
+        sed -i 's/port=3389/port=3390/g' /etc/xrdp/xrdp.ini &&
+        su - kaliuser -c 'echo startxfce4 > ~/.xsession && chmod +x ~/.xsession' &&
+        cat > /etc/xrdp/startwm.sh << 'EOF'
+      #!/bin/sh
+      unset SESSION_MANAGER
+      unset DBUS_SESSION_BUS_ADDRESS
+      exec startxfce4
+      EOF
+        chmod +x /etc/xrdp/startwm.sh &&
+        mkdir -p /var/run/xrdp /var/log/xrdp &&
+        /usr/sbin/xrdp-sesman &&
+        sleep 2 &&
+        /usr/sbin/xrdp &&
+        tail -f /dev/null
+      "
+    
+    # Red personalizada
+    networks:
+      - kali-network
+
+# Volúmenes para persistencia
+volumes:
+  kali-home:
+    driver: local
+  kali-root:
+    driver: local
+  kali-opt:
+    driver: local
+
+# Red personalizada
+networks:
+  kali-network:
+    driver: bridge
+```
+
+### 11.2 Comandos de Docker Compose
+
+#### Iniciar el Contenedor
+
+```bash
+# Iniciar en primer plano (ver logs)
+docker-compose up
+
+# Iniciar en segundo plano (recomendado)
+docker-compose up -d
+
+# Iniciar y reconstruir si hay cambios
+docker-compose up -d --build
+```
+
+#### Detener el Contenedor
+
+```bash
+# Detener servicios
+docker-compose stop
+
+# Detener y eliminar contenedores
+docker-compose down
+
+# Detener, eliminar contenedores y volúmenes
+docker-compose down -v
+```
+
+#### Ver Estado y Logs
+
+```bash
+# Ver servicios corriendo
+docker-compose ps
+
+# Ver logs
+docker-compose logs
+
+# Ver logs en tiempo real
+docker-compose logs -f
+
+# Ver logs de servicio específico
+docker-compose logs -f kali-gui
+```
+
+#### Ejecutar Comandos en el Contenedor
+
+```bash
+# Abrir bash en el contenedor
+docker-compose exec kali-gui bash
+
+# Ejecutar como usuario kaliuser
+docker-compose exec -u kaliuser kali-gui bash
+
+# Ejecutar comando específico
+docker-compose exec kali-gui whoami
+```
+
+#### Reiniciar Servicios
+
+```bash
+# Reiniciar todos los servicios
+docker-compose restart
+
+# Reiniciar servicio específico
+docker-compose restart kali-gui
+```
+
+#### Actualizar y Reconstruir
+
+```bash
+# Detener servicios
+docker-compose down
+
+# Reconstruir desde cero
+docker-compose build --no-cache
+
+# Iniciar con nueva construcción
+docker-compose up -d
+```
+
+### 11.3 Uso Completo Paso a Paso
+
+**1. Crear el archivo docker-compose.yml**
+
+```bash
+# En PowerShell o CMD, navega a tu directorio
+cd C:\laragon\www\kali-on-docker
+
+# Crea el archivo (ya está creado si seguiste la guía)
+# El contenido está arriba en la sección 11.1
+```
+
+**2. Iniciar Kali Linux**
+
+```bash
+# Primera vez (descarga imagen e instala todo)
+docker-compose up -d
+
+# Esperar 5-10 minutos para que instale todo
+# Ver progreso:
+docker-compose logs -f
+```
+
+**3. Verificar que está corriendo**
+
+```bash
+# Ver estado
+docker-compose ps
+
+# Debe mostrar:
+# NAME              STATUS    PORTS
+# kali-gui-rdp      Up        0.0.0.0:3390->3390/tcp
+```
+
+**4. Conectar con MobaXterm**
+
+```
+- Remote host: localhost (o IP del host si es remoto)
+- Port: 3390
+- Username: kaliuser
+- Password: kali123
+```
+
+**5. Cambiar contraseña (recomendado)**
+
+```bash
+# Conectarse al contenedor
+docker-compose exec kali-gui bash
+
+# Cambiar contraseña
+passwd kaliuser
+
+# Salir
+exit
+```
+
+**6. Instalar herramientas adicionales**
+
+```bash
+# Conectarse al contenedor
+docker-compose exec -u kaliuser kali-gui bash
+
+# Instalar herramientas
+sudo apt update
+sudo apt install -y nmap metasploit-framework wpscan hydra john burpsuite
+
+# Salir
+exit
+```
+
+**7. Detener cuando termines**
+
+```bash
+# Detener (mantiene datos)
+docker-compose stop
+
+# O detener y eliminar (mantiene volúmenes)
+docker-compose down
+```
+
+**8. Reiniciar después**
+
+```bash
+# Iniciar de nuevo (datos persisten)
+docker-compose up -d
+
+# Esperar 10 segundos para que XRDP inicie
+timeout /t 10
+
+# Conectar con MobaXterm
+```
+
+### 11.4 Scripts Útiles para Docker Compose
+
+**Crear archivo `start-kali-compose.bat`:**
+
+```batch
+@echo off
+echo Iniciando Kali Linux con Docker Compose...
+cd /d "%~dp0"
+docker-compose up -d
+echo.
+echo Esperando a que XRDP inicie...
+timeout /t 15 /nobreak
+echo.
+echo Kali Linux iniciado!
+echo.
+echo Conecta con MobaXterm a:
+echo   Host: localhost
+echo   Port: 3390
+echo   User: kaliuser
+echo   Pass: kali123
+echo.
+pause
+```
+
+**Crear archivo `stop-kali-compose.bat`:**
+
+```batch
+@echo off
+echo Deteniendo Kali Linux...
+cd /d "%~dp0"
+docker-compose stop
+echo.
+echo Kali Linux detenido!
+pause
+```
+
+**Crear archivo `logs-kali-compose.bat`:**
+
+```batch
+@echo off
+echo Mostrando logs de Kali Linux...
+cd /d "%~dp0"
+docker-compose logs -f
+```
+
+**Crear archivo `shell-kali-compose.bat`:**
+
+```batch
+@echo off
+echo Conectando a terminal de Kali Linux...
+cd /d "%~dp0"
+docker-compose exec -u kaliuser kali-gui bash
+```
+
+### 11.5 Ventajas de Docker Compose
+
+✅ **Configuración declarativa** - Todo en un archivo YAML
+✅ **Persistencia de datos** - Volúmenes automáticos
+✅ **Fácil de compartir** - Solo necesitas el archivo docker-compose.yml
+✅ **Reinicio automático** - Se reinicia si falla
+✅ **Gestión simplificada** - Comandos más cortos
+✅ **Múltiples servicios** - Puedes agregar más contenedores
+
+### 11.6 Personalizar docker-compose.yml
+
+**Cambiar puerto:**
+
+```yaml
+ports:
+  - "33901:3390"  # Puerto externo:interno
+```
+
+**Cambiar usuario y contraseña:**
+
+```yaml
+command: >
+  bash -c "
+    ...
+    useradd -m -s /bin/bash miusuario &&
+    echo 'miusuario:mipassword' | chpasswd &&
+    ...
+```
+
+**Agregar más volúmenes:**
+
+```yaml
+volumes:
+  - kali-home:/home
+  - ./compartido:/compartido  # Carpeta compartida con Windows
+```
+
+**Limitar recursos:**
+
+```yaml
+deploy:
+  resources:
+    limits:
+      cpus: '2'
+      memory: 4G
+```
+
+---
+
 ## 📚 Recursos Adicionales
 
 - [Documentación oficial de Docker](https://docs.docker.com/)
@@ -1263,4 +1763,7 @@ pause
 - [ ] Scripts de inicio creados
 
 ---
+
+
+
 

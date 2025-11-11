@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  kali-gui:
+    image: kalilinux/kali-rolling
+    container_name: kali-gui-rdp
+    hostname: kali-docker
+    
+    # Exponer puerto RDP en todas las interfaces
+    ports:
+      - "0.0.0.0:3390:3390"
+    
+    # Mantener contenedor corriendo
+    stdin_open: true
+    tty: true
+    
+    # Reiniciar automáticamente
+    restart: unless-stopped
+    
+    # Volúmenes para persistencia de datos
+    volumes:
+      - kali-home:/home
+      - kali-root:/root
+      - kali-opt:/opt
+    
+    # Variables de entorno
+    environment:
+      - DISPLAY=:1
+      - DEBIAN_FRONTEND=noninteractive
+    
+    # Comando de inicio
+    command: >
+      bash -c "
+        apt update &&
+        apt install -y sudo nano vim wget curl git xrdp xorgxrdp kali-desktop-xfce xfce4 xfce4-goodies dbus-x11 &&
+        useradd -m -s /bin/bash kaliuser &&
+        echo 'kaliuser:kali123' | chpasswd &&
+        usermod -aG sudo kaliuser &&
+        echo 'kaliuser ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/kaliuser &&
+        chmod 0440 /etc/sudoers.d/kaliuser &&
+        sed -i 's/port=3389/port=3390/g' /etc/xrdp/xrdp.ini &&
+        su - kaliuser -c 'echo startxfce4 > ~/.xsession && chmod +x ~/.xsession' &&
+        cat > /etc/xrdp/startwm.sh << 'EOF'
+      #!/bin/sh
+      unset SESSION_MANAGER
+      unset DBUS_SESSION_BUS_ADDRESS
+      exec startxfce4
+      EOF
+        chmod +x /etc/xrdp/startwm.sh &&
+        mkdir -p /var/run/xrdp /var/log/xrdp &&
+        /usr/sbin/xrdp-sesman &&
+        sleep 2 &&
+        /usr/sbin/xrdp &&
+        tail -f /dev/null
+      "
+    
+    # Red personalizada
+    networks:
+      - kali-network
+
+# Volúmenes para persistencia
+volumes:
+  kali-home:
+    driver: local
+  kali-root:
+    driver: local
+  kali-opt:
+    driver: local
+
+# Red personalizada
+networks:
+  kali-network:
+    driver: bridge
