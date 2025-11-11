@@ -1,0 +1,52 @@
+# Datos persistentes de Docker (no versionar)
+data/
+
+# Archivos de sistema de Windows
+Thumbs.db
+desktop.ini
+*.lnk
+
+# Archivos de sistema de macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+logs/
+
+# Archivos temporales
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-*
+
+# Docker
+.docker/
+
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
+
+# Node modules (si usas alguna herramienta JS)
+node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# Backups
+*.bak
+*.backup

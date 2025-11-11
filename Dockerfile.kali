@@ -1,0 +1,56 @@
+FROM kalilinux/kali-rolling
+
+# Evitar prompts interactivos
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Actualizar sistema e instalar paquetes
+RUN apt update && apt upgrade -y && \
+    apt install -y sudo nano vim wget curl git net-tools iputils-ping && \
+    apt install -y xrdp xorgxrdp && \
+    apt install -y kali-desktop-xfce xfce4 xfce4-goodies && \
+    apt install -y dbus-x11 && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Crear usuario kaliuser
+RUN useradd -m -s /bin/bash kaliuser && \
+    echo 'kaliuser:kali123' | chpasswd && \
+    usermod -aG sudo kaliuser && \
+    echo 'kaliuser ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/kaliuser && \
+    chmod 0440 /etc/sudoers.d/kaliuser
+
+# Configurar XRDP en puerto 3390
+RUN sed -i 's/port=3389/port=3390/g' /etc/xrdp/xrdp.ini
+
+# Configurar sesión XFCE
+RUN echo "startxfce4" > /home/kaliuser/.xsession && \
+    chmod +x /home/kaliuser/.xsession && \
+    chown kaliuser:kaliuser /home/kaliuser/.xsession
+
+# Configurar script de inicio de XRDP
+RUN echo '#!/bin/sh\n\
+unset SESSION_MANAGER\n\
+unset DBUS_SESSION_BUS_ADDRESS\n\
+export XDG_SESSION_TYPE=x11\n\
+export XDG_RUNTIME_DIR=/tmp/runtime-$(whoami)\n\
+mkdir -p $XDG_RUNTIME_DIR\n\
+chmod 700 $XDG_RUNTIME_DIR\n\
+exec startxfce4' > /etc/xrdp/startwm.sh && \
+    chmod +x /etc/xrdp/startwm.sh
+
+# Crear directorios necesarios
+RUN mkdir -p /var/run/xrdp /var/log/xrdp
+
+# Ocultar mensaje de Kali
+RUN touch /root/.hushlogin && \
+    touch /home/kaliuser/.hushlogin && \
+    chown kaliuser:kaliuser /home/kaliuser/.hushlogin
+
+# Exponer puerto XRDP
+EXPOSE 3390
+
+# Script de inicio
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
