@@ -27,8 +27,21 @@ cd kali-on-docker
 
 ### 2. Crear Directorios de Datos (Opcional)
 
-```bash
+**En Windows PowerShell:**
+```powershell
 # Crear directorios para persistencia local
+New-Item -ItemType Directory -Force -Path data\home, data\root, data\tools
+```
+
+**En Windows CMD:**
+```cmd
+mkdir data\home
+mkdir data\root
+mkdir data\tools
+```
+
+**En Linux/Mac:**
+```bash
 mkdir -p data/home data/root data/tools
 ```
 
@@ -454,10 +467,3 @@ Si tienes problemas:
 
 ---
 
-## 📄 Licencia
-
-Este proyecto es de código abierto y está disponible bajo la licencia MIT.
-
----
-
-**¡Disfruta tu Kali Linux con interfaz gráfica en Docker!** 🎉
